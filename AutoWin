@@ -1,0 +1,656 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- CONFIG
+local TARGET_POSITION = Vector3.new(14.450, 1240.259, -150.648)
+local TELEPORT_DELAY = 1
+local RESPAWN_DELAY = 1
+
+-- COLORS
+local BG = Color3.fromRGB(7, 12, 34)
+local CARD = Color3.fromRGB(13, 20, 49)
+local CARD2 = Color3.fromRGB(17, 25, 61)
+local PURPLE = Color3.fromRGB(100, 52, 255)
+local BLUE = Color3.fromRGB(54, 112, 255)
+local WHITE = Color3.fromRGB(244, 246, 255)
+local MUTED = Color3.fromRGB(151, 166, 218)
+local GREEN = Color3.fromRGB(0, 225, 157)
+local ORANGE = Color3.fromRGB(255, 170, 66)
+
+local PANEL_W, PANEL_H = 280, 330
+
+-- CLEAN OLD GUI
+local old = playerGui:FindFirstChild("RayyanAutoWinV83")
+if old then old:Destroy() end
+
+-- STATE
+local enabled = false
+local minimized = false
+local cycles = 0
+local loopToken = 0
+local miniTab
+local reopenButton
+local logLines = {}
+
+-- HELPERS
+local function make(className, props, parent)
+    local obj = Instance.new(className)
+    for key, value in pairs(props or {}) do
+        obj[key] = value
+    end
+    obj.Parent = parent
+    return obj
+end
+
+local function corner(parent, radius)
+    return make("UICorner", {
+        CornerRadius = UDim.new(0, radius or 10)
+    }, parent)
+end
+
+local function outline(parent, color, thickness)
+    return make("UIStroke", {
+        Color = color or PURPLE,
+        Thickness = thickness or 1,
+        Transparency = 0.12
+    }, parent)
+end
+
+local function gradient(parent, c1, c2, rotation)
+    return make("UIGradient", {
+        Color = ColorSequence.new(c1, c2),
+        Rotation = rotation or 0
+    }, parent)
+end
+
+local function tween(obj, duration, properties)
+    local anim = TweenService:Create(
+        obj,
+        TweenInfo.new(
+            duration,
+            Enum.EasingStyle.Quart,
+            Enum.EasingDirection.Out
+        ),
+        properties
+    )
+    anim:Play()
+    return anim
+end
+
+local function label(parent, text, size, position, textSize, color)
+    return make("TextLabel", {
+        BackgroundTransparency = 1,
+        Text = text,
+        Size = size,
+        Position = position,
+        Font = Enum.Font.GothamBold,
+        TextSize = textSize or 12,
+        TextColor3 = color or WHITE,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center
+    }, parent)
+end
+
+local function button(parent, text, size, position, color)
+    local b = make("TextButton", {
+        Size = size,
+        Position = position,
+        BackgroundColor3 = color or CARD2,
+        BorderSizePixel = 0,
+        Text = text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 18,
+        TextColor3 = WHITE,
+        AutoButtonColor = true
+    }, parent)
+    corner(b, 9)
+    return b
+end
+
+-- SCREEN GUI
+local gui = make("ScreenGui", {
+    Name = "RayyanAutoWinV83",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+}, playerGui)
+
+-- MAIN PANEL
+local main = make("Frame", {
+    Name = "MainPanel",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.53),
+    Size = UDim2.fromOffset(PANEL_W, PANEL_H),
+    BackgroundColor3 = BG,
+    BorderSizePixel = 0,
+    ClipsDescendants = true
+}, gui)
+
+corner(main, 17)
+outline(main, PURPLE, 2)
+gradient(main, Color3.fromRGB(13, 20, 57), BG, 45)
+
+-- HEADER
+local header = make("Frame", {
+    Name = "Header",
+    Position = UDim2.fromOffset(5, 5),
+    Size = UDim2.new(1, -10, 0, 47),
+    BackgroundTransparency = 1
+}, main)
+
+-- LOGO
+local logo = make("Frame", {
+    Position = UDim2.fromOffset(5, 5),
+    Size = UDim2.fromOffset(34, 34),
+    BackgroundColor3 = PURPLE,
+    BorderSizePixel = 0
+}, header)
+corner(logo, 20)
+gradient(logo, BLUE, PURPLE, 45)
+
+make("TextLabel", {
+    BackgroundTransparency = 1,
+    Size = UDim2.fromScale(1, 1),
+    Text = "RW",
+    Font = Enum.Font.GothamBlack,
+    TextSize = 14,
+    TextColor3 = WHITE
+}, logo)
+
+label(
+    header, "RAYYAN",
+    UDim2.new(1, -115, 0, 19),
+    UDim2.fromOffset(45, 5), 15, WHITE
+)
+
+label(
+    header, "AUTO WIN SYSTEM",
+    UDim2.new(1, -115, 0, 16),
+    UDim2.fromOffset(46, 23), 9, MUTED
+)
+
+local minimizeButton = button(
+    header, "−", UDim2.fromOffset(30, 31),
+    UDim2.new(1, -66, 0, 7), Color3.fromRGB(32, 35, 112)
+)
+
+local closeButton = button(
+    header, "×", UDim2.fromOffset(30, 31),
+    UDim2.new(1, -32, 0, 7), Color3.fromRGB(143, 30, 80)
+)
+
+-- HEADER DIVIDER
+make("Frame", {
+    Position = UDim2.new(0, 0, 0, 51),
+    Size = UDim2.new(1, 0, 0, 1),
+    BackgroundColor3 = Color3.fromRGB(42, 55, 126),
+    BorderSizePixel = 0
+}, main)
+
+-- BODY
+local body = make("Frame", {
+    Name = "Body",
+    Position = UDim2.fromOffset(9, 58),
+    Size = UDim2.new(1, -18, 1, -65),
+    BackgroundTransparency = 1
+}, main)
+
+label(
+    body, "CONTROL DASHBOARD",
+    UDim2.new(1, 0, 0, 18),
+    UDim2.fromOffset(4, 0), 11, MUTED
+)
+
+-- STATUS CARD
+local statusCard = make("Frame", {
+    Position = UDim2.fromOffset(0, 22),
+    Size = UDim2.new(0.5, -4, 0, 57),
+    BackgroundColor3 = CARD,
+    BorderSizePixel = 0
+}, body)
+corner(statusCard, 10)
+outline(statusCard, Color3.fromRGB(37, 69, 151), 1)
+
+local statusDot = make("Frame", {
+    Position = UDim2.fromOffset(9, 11),
+    Size = UDim2.fromOffset(8, 8),
+    BackgroundColor3 = ORANGE,
+    BorderSizePixel = 0
+}, statusCard)
+corner(statusDot, 8)
+
+label(
+    statusCard, "STATUS",
+    UDim2.new(1, -25, 0, 16),
+    UDim2.fromOffset(22, 7), 9, MUTED
+)
+
+local statusValue = label(
+    statusCard, "IDLE",
+    UDim2.new(1, -12, 0, 22),
+    UDim2.fromOffset(9, 28), 17, ORANGE
+)
+
+-- CYCLE CARD (NO TARGET POSITION)
+local cycleCard = make("Frame", {
+    Position = UDim2.new(0.5, 4, 0, 22),
+    Size = UDim2.new(0.5, -4, 0, 57),
+    BackgroundColor3 = CARD,
+    BorderSizePixel = 0
+}, body)
+corner(cycleCard, 10)
+outline(cycleCard, Color3.fromRGB(62, 47, 160), 1)
+
+label(
+    cycleCard, "CYCLES",
+    UDim2.new(1, -12, 0, 16),
+    UDim2.fromOffset(9, 7), 9, MUTED
+)
+
+local cycleValue = label(
+    cycleCard, "0",
+    UDim2.new(1, -12, 0, 22),
+    UDim2.fromOffset(9, 28), 19, WHITE
+)
+
+-- AUTO WIN CARD
+local autoCard = make("Frame", {
+    Position = UDim2.fromOffset(0, 86),
+    Size = UDim2.new(1, 0, 0, 65),
+    BackgroundColor3 = CARD2,
+    BorderSizePixel = 0
+}, body)
+corner(autoCard, 11)
+outline(autoCard, PURPLE, 1)
+
+label(
+    autoCard, "ϟ",
+    UDim2.fromOffset(30, 42),
+    UDim2.fromOffset(7, 10), 31, PURPLE
+).TextXAlignment = Enum.TextXAlignment.Center
+
+label(
+    autoCard, "AUTO WIN",
+    UDim2.new(1, -105, 0, 21),
+    UDim2.fromOffset(39, 10), 14, WHITE
+)
+
+label(
+    autoCard, "Teleport > Reset > Respawn",
+    UDim2.new(1, -45, 0, 17),
+    UDim2.fromOffset(39, 32), 8, MUTED
+)
+
+local toggle = button(
+    autoCard, "OFF",
+    UDim2.fromOffset(52, 31),
+    UDim2.new(1, -59, 0.5, -15),
+    Color3.fromRGB(71, 40, 83)
+)
+toggle.TextSize = 11
+
+-- ACTIVITY LOG
+local logCard = make("Frame", {
+    Position = UDim2.fromOffset(0, 158),
+    Size = UDim2.new(1, 0, 0, 89),
+    BackgroundColor3 = CARD,
+    BorderSizePixel = 0
+}, body)
+corner(logCard, 11)
+outline(logCard, Color3.fromRGB(34, 49, 119), 1)
+
+label(
+    logCard, "ACTIVITY LOG",
+    UDim2.new(1, -14, 0, 20),
+    UDim2.fromOffset(9, 3), 10, MUTED
+)
+
+local logBox = make("TextLabel", {
+    Position = UDim2.fromOffset(8, 25),
+    Size = UDim2.new(1, -16, 1, -32),
+    BackgroundColor3 = Color3.fromRGB(5, 10, 28),
+    BorderSizePixel = 0,
+    Text = "Ready to start.",
+    Font = Enum.Font.Code,
+    TextSize = 9,
+    TextColor3 = GREEN,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true
+}, logCard)
+corner(logBox, 7)
+
+-- FOOTER
+label(
+    body, "Made by Rayyan",
+    UDim2.new(0.6, 0, 0, 16),
+    UDim2.fromOffset(4, 251), 9, MUTED
+)
+
+local version = label(
+    body, "PREMIUM V8.3",
+    UDim2.new(0.5, 0, 0, 16),
+    UDim2.new(0.5, 0, 0, 251), 9, PURPLE
+)
+version.TextXAlignment = Enum.TextXAlignment.Right
+
+-- ACTIVITY LOG
+local function log(message)
+    table.insert(
+        logLines, 1,
+        "[" .. os.date("%H:%M:%S") .. "] " .. message
+    )
+
+    while #logLines > 4 do
+        table.remove(logLines)
+    end
+
+    logBox.Text = table.concat(logLines, "\n")
+end
+
+local function setStatus(text, color)
+    statusValue.Text = text
+    statusValue.TextColor3 = color
+    statusDot.BackgroundColor3 = color
+end
+
+-- DRAG PANEL
+do
+    local dragging = false
+    local dragStart
+    local startPosition
+    local dragInput
+
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPosition = main.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    header.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (
+            input == dragInput
+            or input.UserInputType == Enum.UserInputType.Touch
+        ) then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(
+                startPosition.X.Scale,
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale,
+                startPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+-- MINIMIZE TO TOP TAB
+local function restoreUI()
+    minimized = false
+
+    if miniTab then
+        miniTab:Destroy()
+        miniTab = nil
+    end
+
+    main.Visible = true
+    main.Size = UDim2.fromOffset(PANEL_W, 55)
+    main.Position = UDim2.new(0.5, 0, 0, 40)
+
+    tween(main, 0.32, {
+        Size = UDim2.fromOffset(PANEL_W, PANEL_H),
+        Position = UDim2.fromScale(0.5, 0.53)
+    })
+end
+
+local function minimizeUI()
+    if minimized then
+        restoreUI()
+        return
+    end
+
+    minimized = true
+
+    miniTab = make("Frame", {
+        Name = "RayyanMiniTab",
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, -55),
+        Size = UDim2.fromOffset(235, 40),
+        BackgroundColor3 = BG,
+        BorderSizePixel = 0,
+        ZIndex = 20
+    }, gui)
+
+    corner(miniTab, 11)
+    outline(miniTab, PURPLE, 2)
+    gradient(miniTab, Color3.fromRGB(22, 28, 65), BG)
+
+    local miniLogo = make("Frame", {
+        Position = UDim2.fromOffset(6, 4),
+        Size = UDim2.fromOffset(32, 32),
+        BackgroundColor3 = PURPLE,
+        BorderSizePixel = 0,
+        ZIndex = 21
+    }, miniTab)
+    corner(miniLogo, 18)
+    gradient(miniLogo, BLUE, PURPLE)
+
+    make("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        Text = "RW",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 12,
+        TextColor3 = WHITE,
+        ZIndex = 22
+    }, miniLogo)
+
+    local miniTitle = label(
+        miniTab, "RAYYAN AUTO WIN",
+        UDim2.new(1, -90, 0, 17),
+        UDim2.fromOffset(44, 3), 10, WHITE
+    )
+    miniTitle.ZIndex = 21
+
+    local miniSubtitle = label(
+        miniTab, "Minimized",
+        UDim2.new(1, -90, 0, 15),
+        UDim2.fromOffset(44, 20), 9, MUTED
+    )
+    miniSubtitle.ZIndex = 21
+
+    local plus = button(
+        miniTab, "+",
+        UDim2.fromOffset(31, 30),
+        UDim2.new(1, -36, 0, 5), PURPLE
+    )
+    plus.ZIndex = 22
+    plus.TextSize = 20
+    plus.Activated:Connect(restoreUI)
+
+    main.Visible = false
+
+    tween(miniTab, 0.32, {
+        Position = UDim2.new(0.5, 0, 0, 8)
+    })
+end
+
+minimizeButton.Activated:Connect(minimizeUI)
+
+-- CLOSE / REOPEN
+local function createReopenButton()
+    if reopenButton then
+        reopenButton:Destroy()
+    end
+
+    reopenButton = button(
+        gui, "RW",
+        UDim2.fromOffset(43, 43),
+        UDim2.new(0, 10, 0.5, -22), PURPLE
+    )
+    reopenButton.Name = "ReopenButton"
+    reopenButton.TextSize = 13
+    reopenButton.ZIndex = 30
+    outline(reopenButton, BLUE, 2)
+
+    reopenButton.Activated:Connect(function()
+        if reopenButton then
+            reopenButton:Destroy()
+            reopenButton = nil
+        end
+
+        if miniTab then
+            miniTab:Destroy()
+            miniTab = nil
+        end
+
+        minimized = false
+        main.Visible = true
+        main.Size = UDim2.fromOffset(PANEL_W, 55)
+        main.Position = UDim2.new(0.5, 0, 0, 40)
+
+        tween(main, 0.32, {
+            Size = UDim2.fromOffset(PANEL_W, PANEL_H),
+            Position = UDim2.fromScale(0.5, 0.53)
+        })
+    end)
+end
+
+closeButton.Activated:Connect(function()
+    main.Visible = false
+
+    if miniTab then
+        miniTab:Destroy()
+        miniTab = nil
+    end
+
+    minimized = false
+    createReopenButton()
+end)
+
+-- AUTO WIN
+local function startAutoWin()
+    loopToken += 1
+    local myToken = loopToken
+
+    task.spawn(function()
+        while enabled and loopToken == myToken do
+            local character = player.Character
+
+            if not character then
+                setStatus("RESPAWN", ORANGE)
+                log("Waiting for character")
+                character = player.CharacterAdded:Wait()
+            end
+
+            if not enabled or loopToken ~= myToken then
+                break
+            end
+
+            local humanoid = character:WaitForChild("Humanoid")
+            local root = character:WaitForChild("HumanoidRootPart")
+
+            if not enabled or loopToken ~= myToken then
+                break
+            end
+
+            setStatus("TELEPORT", BLUE)
+            log("Teleporting to target")
+
+            -- Local teleport may be corrected by the server.
+            root.CFrame = CFrame.new(TARGET_POSITION)
+
+            task.wait(TELEPORT_DELAY)
+
+            if not enabled or loopToken ~= myToken then
+                break
+            end
+
+            setStatus("RESET", PURPLE)
+            log("Resetting character")
+
+            if humanoid.Health > 0 then
+                humanoid.Health = 0
+            end
+
+            setStatus("RESPAWN", ORANGE)
+            log("Waiting for respawn")
+
+            local newCharacter = player.CharacterAdded:Wait()
+            newCharacter:WaitForChild("Humanoid")
+            newCharacter:WaitForChild("HumanoidRootPart")
+
+            if not enabled or loopToken ~= myToken then
+                break
+            end
+
+            task.wait(RESPAWN_DELAY)
+
+            if not enabled or loopToken ~= myToken then
+                break
+            end
+
+            cycles += 1
+            cycleValue.Text = tostring(cycles)
+
+            setStatus("ACTIVE", GREEN)
+            log("Cycle " .. cycles .. " completed")
+
+            task.wait(0.25)
+        end
+    end)
+end
+
+local function stopAutoWin()
+    enabled = false
+    loopToken += 1
+    setStatus("IDLE", ORANGE)
+    log("Auto Win disabled")
+end
+
+toggle.Activated:Connect(function()
+    enabled = not enabled
+
+    if enabled then
+        toggle.Text = "ON"
+        toggle.BackgroundColor3 = GREEN
+        setStatus("ACTIVE", GREEN)
+        log("Auto Win enabled")
+        startAutoWin()
+    else
+        toggle.Text = "OFF"
+        toggle.BackgroundColor3 = Color3.fromRGB(71, 40, 83)
+        stopAutoWin()
+    end
+end)
+
+-- INITIAL STATE
+log("Interface initialized")
+log("Ready to start")
+setStatus("IDLE", ORANGE)
+
+main.Position = UDim2.new(0.5, 0, 1, 350)
+task.wait(0.15)
+
+tween(main, 0.5, {
+    Position = UDim2.fromScale(0.5, 0.53)
+})
